@@ -27,7 +27,7 @@ class PostController extends Controller
     {
         //
         $categories = Category::all(); //call out all Category data
-        $tags = Tag::all(); //call out all Category data
+        $tags = Tag::all(); //call out all Tags data
         return view('posts.create', compact('categories','tags')); 
         //creating an array value for two foreign datas in compact
     }
@@ -38,20 +38,35 @@ class PostController extends Controller
     public function store(Request $request)
     {
         // Request validation of post data
-        $request->validate([
-            'post_title' => 'required',
+        $validatedData = $request->validate([
+            'post_image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
+            'post_title' => 'required|max:255',
             'post_content' => 'required',
-            'post_slug' => 'required',
-            'is_published' => 'required',
+            'post_slug' => 'required|unique:posts',
+            'is_published' => 'sometimes|boolean ',
             'category_id' => 'required'
         ]);
+        $validatedData['post_image'] = $request->file('post_image');
 
-        $post = Post::create([$request->all()]);
+        // Generate a unique name for the image
+        $imageName = time() . '.' . $validatedData['post_image']->getClientOriginalExtension();
+
+        // Move the file to the 'public/uploads' directory
+        $validatedData['post_image']->move(public_path('uploads'), $imageName);
+
+        // Store the image path in the database (if needed)
+        $imagePath = 'uploads/' . $imageName;
+        // Moving the file to the validated data image path
+        $validatedData['post_image'] = $imagePath;
+        $validatedData['is_published'] = $request->has('is_published') ? true :false;
+        $posts = Post::create($validatedData);
+       
         // Now you can attach the tags to the newly created post
         if ($request->has('tags')) {
-            $post->tags()->attach($request->tags); // Use the $post instance
+            $posts->tags()->attach($request->tags); // Use the $post instance
         }
-        
+        $posts->save();
+       
         // Redirecting to the post index.blade.php file with a notification text
         return redirect()->route('posts.index')->with('success', 'Post created successfully');
     }
